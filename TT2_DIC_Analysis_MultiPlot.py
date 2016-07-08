@@ -1,30 +1,75 @@
 import numpy as n
-L = n.loadtxt
+L = n.genfromtxt
 abs=n.abs
-import matplotlib.pyplot as p
 import os
 from sys import argv
 from pandas import read_excel
 import figfun as ff
+import os
+import matplotlib.pyplot as p
+p.close('all')
 
-expts = n.array([22,20])
+# Specify expts or alpha!
+
+try:
+    argv = argv[1:]
+    if len(argv) == 1:
+        # we only have alpha!
+        alpha = float(argv[0])
+        expts = n.array([])
+    elif len(argv)>1:
+        alpha = ...
+        expts = n.array(argv).astype(int)
+    else:
+        raise
+except:
+    expts = n.array([])
+    alpha = n.nan
+
 FS, SS = 19, 6
-
 savefigs = False
 
 key = read_excel('../TT-Summary.xlsx',sheetname='Summary',header=None,index_col=None,skiprows=1).values
-alphatube = n.empty( (len(expts),3) )   #alpha, tube no, thickness
-limloads = n.empty( (len(expts),4) ) #Force, torque, disp, rot
-stat2 = limloads.copy()
-for i in range(len(expts)):
-    alphatube[i] = key[ key[:,0] == expts[i], [1,5,4]].flatten()
 
-order = n.argsort(alphatube[:,0])
+#expt, alpha, tube no, thickness, true alpha, ecc
+if (len(expts) >= 1) and (alpha == ...) :
+    expinfo = key[ n.in1d(key[:,0], expts), :][:,[0,1,4,5,2,6]]
+    savepath = '../ComparisonFigs/PaperSet'.format(alpha)
+elif (type(alpha) in [int,float]) and (len(expts)==0):
+    expinfo = key[ key[:,1]==alpha,: ][:,[0,1,4,5,2,6]]
+    savepath = '../ComparisonFigs/Alpha-{}'.format(alpha)
+    print(savepath)
+    if n.isnan(alpha):
+        expinfo = key[ n.isnan(key[:,1]),: ][:,[0,1,4,5,2,6]]
+        savepath = '../ComparisonFigs/Alpha-Inf'.format(alpha)
+else:
+    raise ValueError('expts must be empty array OR alpha must be ellipsis')
+    
 
-expts = expts[order]
-alphatube = alphatube[order,:]
+if (len(expinfo.shape)==2) and (expinfo.shape[0]==1):
+    # Specifying Experiments
+    expinfo = expinfo.ravel()
+    expts = n.array([expinfo[0]]).astype(int)
+    limloads = n.empty( (len(expts),4) ) #Force, torque, disp, rot
+    stat2 = n.empty_like(limloads)
+    expinfo = expinfo[None,:]
+else:
+    expinfo = expinfo[ ~n.in1d(expinfo[:,0],[10,26,36]), :]    # A couple of bad expts we want to exclude
+    order = n.argsort(expinfo[:,1])
+    expinfo = expinfo[order,:]
+    expts = expinfo[:,0].astype(int)
+    limloads = n.empty( (len(expts),4) ) #Force, torque, disp, rot
+    stat2 = n.empty_like(limloads)
+    savepath = '../ComparisonFigs/Alpha-1.5_NoPlugExpt'
+    
+legtitle = 'Expt; $\\alpha$; Tube; $\\Xi$'
+    
+if (savefigs == True) and not (os.path.exists(savepath)):
+    os.mkdir(savepath)
 
-for G in range(len(order)):
+    
+    
+for G in range(len(expts)):
     
     relpath  = '../TT2-{}_FS{}SS{}'.format(expts[G],FS,SS)
             
@@ -55,7 +100,6 @@ for G in range(len(order)):
     profLEp = L('{}/StrainProfiles.dat'.format(relpath),delimiter=',')
     profUr = L('{}/RadialContraction.dat'.format(relpath),delimiter=',')[1:]
     
-    
     ##################################################
     # Figure 1 - AxSts-Delta and ShearSts-Rot
     ##################################################
@@ -65,8 +109,8 @@ for G in range(len(order)):
         ax11 = fig1.add_subplot(2,1,1)
         ax12 = fig1.add_subplot(2,1,2)
     
-    ax11.plot(DR[:,4],DR[:,2],label = '{:.0f}; {}; {:.0f}'.format(expts[G],alphatube[G,0],alphatube[G,1]))
-    ax12.plot(DR[:,5],DR[:,3],label = '{:.0f}; {}; {:.0f}'.format(expts[G],alphatube[G,0],alphatube[G,1]))
+    LINE, = ax11.plot(DR[:,4],DR[:,2],label = '{:.0f}; {:.2f}; {:.0f}; {:.1f}'.format(expts[G],expinfo[G,4],expinfo[G,3],expinfo[G,5]))
+    ax12.plot(DR[:,5],DR[:,3],label=LINE.get_label())
     
     if G == len(expts)-1:
         for J in range(len(expts)):
@@ -81,7 +125,8 @@ for G in range(len(order)):
         ax11.set_ylim([0,1.2*n.max(limloads[:,0])])
         ax11.set_xlim(left=0)
         l1 = ax11.legend([m12,m11],["Station 2", "LL"],loc='upper right',numpoints=1,fontsize=10,frameon=False)
-        l2 = ax11.legend(loc='lower right',fontsize=10,title='Expt; $\\alpha$; Tube')
+        p.setp(l1.get_texts(),color='r')
+        l2 = ax11.legend(loc='lower right',fontsize=10,title=legtitle)
         p.setp(l2.get_title(),fontsize=10)
         ax11.add_artist(l1)
         ax12.set_xlabel('$\\phi^\\circ$')
@@ -89,7 +134,8 @@ for G in range(len(order)):
         ax12.set_ylim([0,1.2*n.max(limloads[:,1])])
         ax12.set_xlim(left=0)
         l1 = ax12.legend([m22,m21],["Station 2", "LL"],loc='upper right',numpoints=1,fontsize=10,frameon=False)
-        l2 = ax12.legend(loc='lower right',fontsize=10,title='Expt; $\\alpha$; Tube')
+        p.setp(l1.get_texts(),color='r')
+        l2 = ax12.legend(loc='lower right',fontsize=10,title=legtitle)
         p.setp(l2.get_title(),fontsize=10)
         ax12.add_artist(l1)
         
@@ -99,7 +145,7 @@ for G in range(len(order)):
         ff.myax(fig1,ff.ksi2Mpa,'$\\mathcal{T}$\n$(\\mathsf{MPa})$')
 
         if savefigs:
-            fig1.savefig('1 - Sts-Delta-Rot.png',dpi=125)
+            fig1.savefig('{}/1 - Sts-Delta-Rot.png'.format(savepath),dpi=125)
             #p.close()
 
     ##################################################
@@ -111,10 +157,10 @@ for G in range(len(order)):
         ax21 = fig2.add_subplot(2,1,1)
         ax22 = fig2.add_subplot(2,1,2)
     
-    plt = ax21.plot(abs(dmean[:,7]),dmean[:,6],'o',ms=4,mec='none',label = '{:.0f}; {}; {:.0f}'.format(expts[G],alphatube[G,0],alphatube[G,1]))[0]
-    ax21.plot(abs(dmax[-1,6]),dmax[-1,5],'s',ms=8,mec='none',color=plt.get_mfc())
-    plt = ax22.plot(abs(dmean[:,10]),dmean[:,9],'o',ms=4,mec='none',label = '{:.0f}; {}; {:.0f}'.format(expts[G],alphatube[G,0],alphatube[G,1]))[0]
-    ax22.plot(abs(dmax[-1,9]),dmax[-1,8],'s',mec='none',ms=8,color=plt.get_mfc())
+    ax21.plot(abs(dmean[:,7]),dmean[:,6],'o',ms=4,mfc=LINE.get_color(),mec=LINE.get_color(),label=LINE.get_label())
+    ax21.plot(abs(dmax[-1,6]),dmax[-1,5],'s',ms=8,mfc=LINE.get_color(),mec=LINE.get_color())
+    ax22.plot(abs(dmean[:,10]),dmean[:,9],'o',ms=4,mfc=LINE.get_color(),mec=LINE.get_color(),label=LINE.get_label())
+    ax22.plot(abs(dmax[-1,9]),dmax[-1,8],'s',mfc=LINE.get_color(),mec=LINE.get_color(),ms=8)
     
     if G == len(expts)-1:
         ax21.set_title('Mean strain path; Aramis User manual Definitions',fontsize=14)
@@ -122,17 +168,15 @@ for G in range(len(order)):
         ax21.set_ylabel('$\\epsilon_y$')
         ax21.set_ylim(bottom=0)
         ax21.set_xlim(left=0)
-        l2 = ax21.legend(loc='center left',bbox_to_anchor=(1.01,.5),fontsize=10,numpoints=1,handletextpad=.1,title='Expt; $\\alpha$; Tube')
+        l2 = ax21.legend(loc='center left',bbox_to_anchor=(1.01,.5),fontsize=10,numpoints=1,handletextpad=.1,title=legtitle)
         p.setp(l2.get_title(),fontsize=10)
-        #ax21.legend(loc='lower left')
         ax22.set_title('Mean strain path; Haltom 2013 Definitions',fontsize=14)
         ax22.set_xlabel('$\\gamma = atan(\\mathsf{F}_{\\mathsf{01}}/\\mathsf{F}_{\\mathsf{11}}$)')
         ax22.set_ylabel('$\\epsilon_{\\mathsf{y}}$\n$\\mathsf{F}_{\\mathsf{11}}-\\mathsf{1}$')
         ax22.set_ylim(bottom=0)
         ax22.set_xlim(left=0)
-        l2 = ax22.legend(loc='center left',bbox_to_anchor=(1.01,.5),fontsize=10,numpoints=1,handletextpad=.1,title='Expt; $\\mathregular{\\alpha}}$; Tube')
+        l2 = ax22.legend(loc='center left',bbox_to_anchor=(1.01,.5),fontsize=10,numpoints=1,handletextpad=.1,title=legtitle)
         p.setp(l2.get_title(),fontsize=10)
-        #ax22.legend(loc='lower left')
         
         p.sca(ax21)
         ff.myax(fig2)
@@ -140,7 +184,7 @@ for G in range(len(order)):
         ff.myax(fig2)
         
         if savefigs:
-            fig2.savefig('2 - StrainPath.png',dpi=125,bbox_inches='tight')
+            fig2.savefig('{}/2 - StrainPath.png'.format(savepath),dpi=125,bbox_inches='tight')
             #p.close()
 
     ##################################################
@@ -153,9 +197,9 @@ for G in range(len(order)):
         plt3 = []
     
     # Station 2
-    plt3.append(ax3.plot(2*profUr[:,0]/0.62,profUr[:,1+1],'--',lw=1.5,color=plt.get_color())[0])
+    mark1, = ax3.plot(2*profUr[:,0]/0.62,profUr[:,1+1],'--',lw=1.5,color=LINE.get_color())
     # Limit Load
-    plt3.append(ax3.plot(2*profUr[:,0]/0.62,profUr[:,2+1],lw=1.5,color=plt.get_color(),label = '{:.0f}; {}; {:.0f}'.format(expts[G],alphatube[G,0],alphatube[G,1]))[0])
+    mark2, = ax3.plot(2*profUr[:,0]/0.62,profUr[:,2+1],lw=1.5,color=LINE.get_color(),label=LINE.get_label())
     
     if G == len(expts) - 1:
         
@@ -164,9 +208,11 @@ for G in range(len(order)):
         ax3.set_ylabel('$\\frac{\\mathsf{u}_{\\mathsf{r}}}{\\mathsf{R}_{\\mathsf{o}}}$')
         ax3.set_xlim([-1,1])
         ax3.grid(True,which='both',axis='y',linestyle='--',alpha=0.5)
-        l2 = ax3.legend(plt3[0:2],['Station 2','Limit Load'],loc='lower left',frameon=False)
-        l3 = ax3.legend(loc='lower right',title='Expt; $\\alpha$; Tube')
+        l2 = ax3.legend([mark1, mark2] ,['Station 2','Limit Load'],loc='lower left')
+        p.setp(l2.get_lines(),color='k')
+        l3 = ax3.legend(loc='lower right',title=legtitle,frameon=True)
         p.setp(l3.get_title(),fontsize=12)
+        p.setp(l3.get_frame(),lw=0)
         ax3.add_artist(l2)
         yl = ax3.get_ylim()
         ax3.yaxis.set_ticks(n.arange(-.024,0+.004,.004))
@@ -176,7 +222,7 @@ for G in range(len(order)):
         ff.myax(fig3,TW=.002,HW=.3,HL=.05,OH=.2)
         
         if savefigs:
-            fig3.savefig('3 - RadialContraction.png',dpi=125,bbox_inches='tight')
+            fig3.savefig('{}/3 - RadialContraction.png'.format(savepath),dpi=125,bbox_inches='tight')
             #p.close()   
 
     ##################################################
@@ -186,10 +232,8 @@ for G in range(len(order)):
         p.style.use('mysty')
         fig4 = p.figure(4,facecolor='w',figsize=(12,6) )
         ax4 = fig4.add_axes([.12,.12,.8,.78])
-        plt4 = []
     
-    #plt4.append( ax4.plot(profLEp[:,2*2],profLEp[:,2*2+1],color=plt.get_color(), alpha = 0.4)[0] )
-    plt4.append( ax4.plot(profLEp[:,-3]/alphatube[G,2],profLEp[:,-1],color=plt.get_color(),label = '{:.0f}; {}; {:.0f}'.format(expts[G],alphatube[G,0],alphatube[G,1]))[0] )
+    ax4.plot(profLEp[:,-3]/expinfo[G,2],profLEp[:,-1],color=LINE.get_color(),label=LINE.get_label())
     
     if G == len(expts) - 1:
         
@@ -197,21 +241,17 @@ for G in range(len(order)):
         ax4.set_xlabel('y$_{\\mathsf{o}}$/t$_{\\mathsf{o}}$')
         ax4.set_ylabel('$\\mathsf{e}^{\\mathsf{p}}_{\\mathsf{e}}$')
         ax4.set_xlim([-8,8])
-        #l1 = ax4.legend(plt4[0:2],['Limit Load','Failure'],loc='lower left',frameon=False)
-        l2 = ax4.legend(loc='upper right',title='Expt; $\\alpha$; Tube')
+        l2 = ax4.legend(loc='upper right',title=legtitle)
         p.setp(l2.get_title(),fontsize=12)
-        #ax4.add_artist(l1)
-        #yl = ax3.get_ylim()
-        #ax3.yaxis.set_ticks(n.arange(-.024,0+.004,.004))
-        #ax3.set_ylim(yl)
         
         p.sca(ax4)
         ff.myax(fig4,TW=.0025,HW=.3,HL=.05,OH=.2)
         
         if savefigs:
-            fig4.savefig('4 - Strain Profile.png',dpi=125,bbox_inches='tight')
+            fig4.savefig('{}/4 - Strain Profile.png'.format(savepath),dpi=125,bbox_inches='tight')
             #p.close()   
-            
             
 if not savefigs:
     p.show('all')        
+else:
+    p.close('all')
